@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>کتابخون</title>
+<script src="pdf.min.js"></script>
+<style>
+:root{
+  --bg:#eef1f6; --ink:#1a2038; --muted:#5b6482; --panel:#ffffff; --line:#d5dbe8;
+  --accent:#0e7490; --accent-ink:#ffffff; --hl:#cdeef5; --warn:#9a3412;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#12162a; --ink:#e8ebf7; --muted:#9aa3c2; --panel:#1b2040; --line:#2d3560;
+    --accent:#38bdf8; --accent-ink:#06223a; --hl:#1e3a5f; --warn:#fdba74;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html{font-size:17px}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Vazirmatn","Noto Naskh Arabic","Tahoma",sans-serif; line-height:1.9;
+}
+main{max-width:720px; margin:0 auto; padding:20px 16px 60px}
+h1{font-size:2.2rem; margin:8px 0 0}
+.sub{color:var(--muted); margin:0 0 20px}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px}
+.panel h2{font-size:1.05rem; margin:0 0 10px}
+.drop{
+  display:block; text-align:center; padding:28px 12px; cursor:pointer;
+  border:2px dashed var(--line); border-radius:14px; background:var(--panel);
+}
+.drop:focus-within,.drop:hover{border-color:var(--accent)}
+.drop input{position:absolute; opacity:0; width:1px; height:1px}
+.drop strong{display:block; font-size:1.1rem}
+.drop span{color:var(--muted); font-size:.9rem}
+.status{color:var(--muted); font-size:.9rem; min-height:1.6em; margin:8px 0 0}
+.status.err{color:var(--warn)}
+#reader{display:none}
+#now{
+  font-size:1.55rem; line-height:2.1; padding:18px 16px; border-radius:12px;
+  background:var(--hl); min-height:8.5em; margin-bottom:14px;
+}
+.row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+button,select,input[type=number]{
+  font:inherit; font-size:.95rem; color:var(--ink); background:var(--panel);
+  border:1px solid var(--line); border-radius:10px; padding:8px 14px; cursor:pointer;
+}
+input[type=number]{cursor:text; width:6.5em}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.main{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:700; padding:10px 24px}
+button:focus-visible,select:focus-visible,input:focus-visible,li:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+label.f{display:block; font-size:.9rem; color:var(--muted); margin:10px 0 4px}
+select{width:100%}
+input[type=range]{width:100%; accent-color:var(--accent)}
+.page-info{color:var(--muted); font-size:.9rem; margin-inline-start:auto}
+#list{list-style:none; margin:0; padding:0; max-height:260px; overflow:auto; border-top:1px solid var(--line)}
+#list li{padding:8px 4px; border-bottom:1px solid var(--line); cursor:pointer; font-size:.95rem}
+#list li.on{background:var(--hl)}
+audio{width:100%; margin-top:12px}
+.hint{font-size:.85rem; color:var(--muted); margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>کتابخون</h1>
+  <p class="sub">فایل PDF را انتخاب کنید تا کتاب برایتان خوانده شود. بدون نیاز به اینترنت.</p>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="application/pdf">
+    <strong>انتخاب فایل PDF</strong>
+    <span>از حافظهٔ گوشی</span>
+  </label>
+  <p class="status" id="status" role="status"></p>
+
+  <section id="reader">
+    <div class="panel">
+      <div id="now" aria-live="polite"></div>
+      <div class="row">
+        <button id="prev" aria-label="جملهٔ قبل">قبلی</button>
+        <button id="play" class="main">شروع خواندن</button>
+        <button id="next" aria-label="جملهٔ بعد">بعدی</button>
+        <span class="page-info" id="pageInfo"></span>
+      </div>
+      <p class="status" id="voiceNote"></p>
+    </div>
+
+    <div class="panel">
+      <h2>تنظیم صدا</h2>
+      <label class="f" for="voice">صدا</label>
+      <select id="voice">
+        <option value="amir">امیر (صدای مرد)</option>
+        <option value="ganji_adabi">گنجی ادبی (صدای مرد)</option>
+      </select>
+      <label class="f" for="rate">سرعت: <span id="rateVal">0.9</span> (برای رمان، آهسته‌تر بهتر است)</label>
+      <input type="range" id="rate" min="0.6" max="1.3" step="0.1" value="0.9">
+    </div>
+
+    <div class="panel">
+      <h2>ساخت فایل صوتی</h2>
+      <div class="row">
+        <label for="pFrom">از صفحه</label>
+        <input type="number" id="pFrom" min="1" value="1">
+        <label for="pTo">تا صفحه</label>
+        <input type="number" id="pTo" min="1" value="1">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="build" class="main">ساخت فایل</button>
+        <button id="cancelBuild" disabled>توقف</button>
+      </div>
+      <p class="status" id="buildNote"></p>
+      <audio id="player" controls hidden></audio>
+      <div class="row" style="margin-top:12px">
+        <button id="save" disabled>ذخیره در پوشهٔ Download</button>
+        <button id="share" disabled>اشتراک‌گذاری</button>
+      </div>
+      <p class="hint">فایل با فرمت WAV ساخته می‌شود و حجمش زیاد است (حدود ۲٫۶ مگابایت برای هر دقیقه). بهتر است هر بار چند صفحه بسازید.</p>
+    </div>
+
+    <div class="panel">
+      <h2>متن این صفحه</h2>
+      <ul id="list"></ul>
+    </div>
+  </section>
+</main>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "pdf.worker.min.js";
+
+const $ = id => document.getElementById(id);
+const fa = n => Number(n).toLocaleString("fa");
+const A = window.Android;
+
+let flat = [];
+let idx = 0;
+let playing = false;
+let token = 0;
+let totalPages = 0;
+let lastName = null;
+
+function setStatus(msg, err){ const s=$("status"); s.textContent=msg; s.className="status"+(err?" err":""); }
+function note(id, m, err){ const n=$(id); n.textContent=m; n.className="status"+(err?" err":""); }
+
+if(!A){ setStatus("این صفحه باید داخل برنامهٔ کتابخون روی اندروید باز شود.", true); }
+
+/* ---------- Native bridge: speech ---------- */
+const pending = new Map();
+let nid = 0;
+window.__ttsDone = (id, b64, sr) => { const p = pending.get(id); if(p){ pending.delete(id); p.res({b64, sr}); } };
+window.__ttsFail = (id, msg) => { const p = pending.get(id); if(p){ pending.delete(id); p.rej(new Error(msg)); } };
+
+function nativeSynth(text){
+  return new Promise((res, rej) => {
+    const id = ++nid;
+    pending.set(id, {res, rej});
+    A.synth(id, text, $("voice").value, Number($("rate").value));
+  });
+}
+
+function pcmToWavUrl(b64, sr){
+  const bin = atob(b64), n = bin.length;
+  const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, s) => { for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4, 36+n, true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true);
+  v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true);
+  v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,n,true);
+  const u8 = new Uint8Array(buf, 44);
+  for(let i=0;i<n;i++) u8[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([buf], {type:"audio/wav"}));
+}
+
+/* ---------- PDF loading ---------- */
+function splitSentences(text){
+  const clean = text.replace(/\s+/g," ").trim();
+  if(!clean) return [];
+  const parts = clean.match(/[^.!?؟۔]+[.!?؟۔]?/g) || [clean];
+  const out = [];
+  for(let p of parts){
+    p = p.trim();
+    while(p.length > 220){
+      let cut = Math.max(p.lastIndexOf("،",200), p.lastIndexOf(",",200), p.lastIndexOf(" ",200));
+      if(cut < 60) cut = 200;
+      out.push(p.slice(0,cut+1).trim());
+      p = p.slice(cut+1).trim();
+    }
+    if(p) out.push(p);
+  }
+  return out;
+}
+
+async function loadPdf(file){
+  stopSpeech(); flat = []; idx = 0;
+  $("reader").style.display = "none";
+  try{
+    setStatus("در حال باز کردن فایل…");
+    const pdf = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+    totalPages = pdf.numPages;
+    for(let n=1; n<=totalPages; n++){
+      setStatus("در حال خواندن صفحهٔ " + fa(n) + " از " + fa(totalPages) + "…");
+      const page = await pdf.getPage(n);
+      const tc = await page.getTextContent();
+      const text = tc.items.map(i => i.str + (i.hasEOL ? " " : "")).join(" ");
+      splitSentences(text).forEach(t => flat.push({p:n, t}));
+    }
+    if(!flat.length){
+      setStatus("متنی در این فایل پیدا نشد. احتمالاً فایل اسکن‌شده (عکس) است و باید OCR اضافه شود.", true);
+      return;
+    }
+    setStatus("«" + file.name + "» آماده است: " + fa(totalPages) + " صفحه.");
+    $("pFrom").max = $("pTo").max = totalPages;
+    $("pFrom").value = 1; $("pTo").value = Math.min(totalPages, 5);
+    $("reader").style.display = "block";
+    $("list").dataset.page = "";
+    show();
+  }catch(e){
+    console.error(e);
+    setStatus("باز کردن فایل ممکن نشد. فایل PDF دیگری را امتحان کنید.", true);
+  }
+}
+$("file").addEventListener("change", e => { if(e.target.files[0]) loadPdf(e.target.files[0]); });
+
+/* ---------- Display ---------- */
+function show(){
+  const cur = flat[idx];
+  $("now").textContent = cur.t;
+  $("pageInfo").textContent = "صفحهٔ " + fa(cur.p) + " از " + fa(totalPages);
+  const ul = $("list");
+  if(ul.dataset.page !== String(cur.p)){
+    ul.innerHTML = "";
+    flat.forEach((s,i) => {
+      if(s.p !== cur.p) return;
+      const li = document.createElement("li");
+      li.textContent = s.t; li.dataset.i = i; li.tabIndex = 0;
+      li.addEventListener("click", () => jump(i));
+      ul.appendChild(li);
+    });
+    ul.dataset.page = String(cur.p);
+  }
+  [...ul.children].forEach(li => li.classList.toggle("on", Number(li.dataset.i) === idx));
+  const on = ul.querySelector(".on"); if(on) on.scrollIntoView({block:"nearest"});
+}
+
+/* ---------- Speaking ---------- */
+const GAP = 350;
+const audioEl = new Audio();
+const cacheMap = new Map();
+
+function cacheKey(i){ return i + "|" + $("voice").value + "|" + $("rate").value; }
+function getAudioUrl(i){
+  if(i >= flat.length) return Promise.resolve(null);
+  const k = cacheKey(i);
+  if(!cacheMap.has(k)){
+    if(cacheMap.size > 30){
+      const first = cacheMap.keys().next().value;
+      cacheMap.get(first).then(u => u && URL.revokeObjectURL(u)).catch(()=>{});
+      cacheMap.delete(first);
+    }
+    const p = nativeSynth(flat[i].t)
+      .then(r => pcmToWavUrl(r.b64, r.sr))
+      .catch(e => { cacheMap.delete(k); throw e; });
+    cacheMap.set(k, p);
+  }
+  return cacheMap.get(k);
+}
+
+async function speak(){
+  if(!playing || idx >= flat.length){ stopSpeech(); return; }
+  const my = ++token;
+  show();
+  try{
+    note("voiceNote", "در حال آماده‌سازی صدا… (بار اول چند ثانیه طول می‌کشد)");
+    const url = await getAudioUrl(idx);
+    if(my !== token) return;
+    note("voiceNote", "");
+    audioEl.onended = () => {
+      if(my !== token || !playing) return;
+      setTimeout(() => { if(my === token && playing){ idx++; speak(); } }, GAP);
+    };
+    audioEl.src = url;
+    await audioEl.play();
+    getAudioUrl(idx + 1).catch(()=>{});
+  }catch(e){
+    if(my === token){
+      stopSpeech();
+      note("voiceNote", "خواندن شروع نشد: " + e.message, true);
+    }
+  }
+}
+function stopSpeech(){
+  playing = false; token++;
+  audioEl.pause();
+  $("play").textContent = "شروع خواندن";
+}
+function jump(i){ idx = Math.max(0, Math.min(flat.length-1, i)); if(playing) speak(); else show(); }
+
+$("play").addEventListener("click", () => {
+  if(!flat.length || !A) return;
+  if(playing){ stopSpeech(); }
+  else { playing = true; $("play").textContent = "توقف"; speak(); }
+});
+$("next").addEventListener("click", () => jump(idx+1));
+$("prev").addEventListener("click", () => jump(idx-1));
+$("rate").addEventListener("input", e => { $("rateVal").textContent = e.target.value; });
+$("rate").addEventListener("change", () => { if(playing) speak(); });
+$("voice").addEventListener("change", () => { if(playing) speak(); });
+
+/* ---------- Build audio file ---------- */
+window.__buildProgress = (d, t) => note("buildNote", "در حال ساخت: " + fa(d) + " از " + fa(t) + " جمله…");
+window.__buildDone = name => {
+  lastName = name;
+  const p = $("player");
+  p.src = "https://appassets.androidplatform.net/exports/" + name;
+  p.hidden = false;
+  $("save").disabled = false; $("share").disabled = false;
+  $("build").disabled = false; $("cancelBuild").disabled = true;
+  note("buildNote", "فایل آماده شد. می‌توانید گوش دهید، ذخیره کنید یا بفرستید.");
+};
+window.__buildFail = msg => {
+  $("build").disabled = false; $("cancelBuild").disabled = true;
+  if(msg === "stopped") note("buildNote", "ساخت فایل متوقف شد.");
+  else note("buildNote", "ساخت فایل کامل نشد: " + msg, true);
+};
+window.__fileMsg = (m, err) => note("buildNote", m, err);
+
+$("build").addEventListener("click", () => {
+  if(!A || !flat.length) return;
+  const from = Math.max(1, Number($("pFrom").value) || 1);
+  const to = Math.min(totalPages, Number($("pTo").value) || from);
+  const items = flat.filter(s => s.p >= from && s.p <= to).map(s => s.t);
+  if(!items.length){ note("buildNote", "در این بازهٔ صفحه متنی نیست.", true); return; }
+  stopSpeech();
+  $("build").disabled = true; $("cancelBuild").disabled = false;
+  $("save").disabled = true; $("share").disabled = true;
+  note("buildNote", "در حال آماده‌سازی صدا… (بار اول چند ثانیه طول می‌کشد)");
+  A.buildAudio("ketabkhoon-" + Date.now() + ".wav", JSON.stringify(items), $("voice").value, Number($("rate").value));
+});
+$("cancelBuild").addEventListener("click", () => { if(A) A.cancelBuild(); });
+$("save").addEventListener("click", () => { if(A && lastName) A.saveToDownloads(lastName); });
+$("share").addEventListener("click", () => { if(A && lastName) A.shareFile(lastName); });
+</script>
+</body>
+</html>
