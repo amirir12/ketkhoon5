@@ -96,7 +96,7 @@ class Bridge(
         )
         val modelConfig = OfflineTtsModelConfig(
             vits = vits,
-            numThreads = 2,
+            numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
             debug = false,
             provider = "cpu"
         )
@@ -132,6 +132,19 @@ class Bridge(
         b.put("data".toByteArray())
         b.putInt(dataLen.toInt())
         return b.array()
+    }
+
+    /** Loads the voice in the background so the first sentence starts quickly. */
+    @JavascriptInterface
+    fun warmUp(voice: String) {
+        exec.execute {
+            try {
+                engine(voice)
+                js("window.__warmDone && window.__warmDone()")
+            } catch (t: Throwable) {
+                js("window.__warmFail && window.__warmFail(${JSONObject.quote(t.message ?: "error")})")
+            }
+        }
     }
 
     /** Reads one sentence aloud: returns raw audio to the page. */
